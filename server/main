@@ -1,0 +1,98 @@
+local ESX = exports["es_extended"]:getSharedObject()
+
+-- Acheter et enregistrer l'animal en base
+ESX.RegisterServerCallback('esx_animal:purchaseAnimal', function(source, cb, price, model)
+    local xPlayer = ESX.GetPlayerFromId(source)
+
+    if xPlayer.getMoney() >= price then
+        xPlayer.removeMoney(price)
+        local identifier = xPlayer.identifier
+        -- Récupérer les animaux existants
+        MySQL.Async.fetchAll('SELECT animals FROM owned_animals WHERE identifier = @identifier', {
+            ['@identifier'] = identifier
+        }, function(result)
+            local animals = {}
+            if result[1] and result[1].animals and result[1].animals ~= '' then
+                animals = json.decode(result[1].animals) or {}
+            end
+
+            table.insert(animals, {label = model, model = model, hunger = 100, thirst = 100})
+            local animalsJson = json.encode(animals)
+
+            if result[1] then
+                MySQL.Async.execute('UPDATE owned_animals SET animals = @animals WHERE identifier = @identifier', {
+                    ['@animals'] = animalsJson,
+                    ['@identifier'] = identifier
+                })
+            else
+                MySQL.Async.execute('INSERT INTO owned_animals (identifier, animals) VALUES (@identifier, @animals)', {
+                    ['@identifier'] = identifier,
+                    ['@animals'] = animalsJson
+                })
+            end
+
+            cb(true, animals)
+        end)
+    else
+        cb(false)
+    end
+end)
+
+-- Retourne les animaux possédés par le joueur
+ESX.RegisterServerCallback('esx_animal:getOwnedAnimals', function(source, cb)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    if not xPlayer then cb({}) return end
+    local identifier = xPlayer.identifier
+    MySQL.Async.fetchAll('SELECT animals FROM owned_animals WHERE identifier = @identifier', {
+        ['@identifier'] = identifier
+    }, function(result)
+        if result[1] and result[1].animals and result[1].animals ~= '' then
+            local animals = json.decode(result[1].animals) or {}
+            cb(animals)
+        else
+            cb({})
+        end
+    end)
+end)
+
+-- Sauvegarder la liste d'animaux envoyée par le client
+RegisterServerEvent('esx_animal:saveOwnedAnimals')
+AddEventHandler('esx_animal:saveOwnedAnimals', function(animals)
+    local _source = source
+    local xPlayer = ESX.GetPlayerFromId(_source)
+    if not xPlayer then return end
+    local identifier = xPlayer.identifier
+    local animalsJson = json.encode(animals or {})
+    MySQL.Async.fetchAll('SELECT id FROM owned_animals WHERE identifier = @identifier', {
+        ['@identifier'] = identifier
+    }, function(result)
+        if result[1] then
+            MySQL.Async.execute('UPDATE owned_animals SET animals = @animals WHERE identifier = @identifier', {
+                ['@animals'] = animalsJson,
+                ['@identifier'] = identifier
+            })
+        else
+            MySQL.Async.execute('INSERT INTO owned_animals (identifier, animals) VALUES (@identifier, @animals)', {
+                ['@identifier'] = identifier,
+                ['@animals'] = animalsJson
+            })
+        end
+    end)
+end)
+
+-- Utilisation des items
+RegisterServerEvent('esx_animal:useItem')
+AddEventHandler('esx_animal:useItem', function(item)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    
+    if xPlayer.getInventoryItem(item).count > 0 then
+        xPlayer.removeInventoryItem(item, 1)
+        if item == 'pet_food' then
+            TriggerClientEvent('esx_animal:useFood', source)
+        elseif item == 'pet_water' then
+            TriggerClientEvent('esx_animal:useWater', source)
+        end
+    else
+        TriggerClientEvent('esx:showNotification', source, "Vous n'avez pas cet item!")
+    end
+end)
