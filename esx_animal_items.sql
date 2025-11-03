@@ -1,4 +1,3 @@
--- Table pour stocker les animaux possédés par les joueurs (JSON)
 CREATE TABLE IF NOT EXISTS `owned_animals` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `identifier` varchar(50) NOT NULL,
@@ -10,3 +9,4 @@ CREATE TABLE IF NOT EXISTS `owned_animals` (
 INSERT INTO `items` (`name`, `label`, `weight`, `rare`, `can_remove`) VALUES
         ('pet_food', 'Pet Food', 1, 0, 1),
         ('pet_water', 'Pet Water', 1, 0, 1);
+
